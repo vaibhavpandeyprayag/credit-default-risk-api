@@ -7,7 +7,7 @@ import shap
 from fastapi.middleware.cors import CORSMiddleware
 
 model = joblib.load("models/random_forest_model.joblib")
-
+threshold = joblib.load("models/random_forest_threshold.joblib")
 # Build explainer once at startup — expensive, don't do it per request
 # model[-1] accesses the RF classifier inside the sklearn Pipeline
 explainer = shap.TreeExplainer(model[-1])
@@ -73,7 +73,7 @@ FEATURE_LABELS = {
     "other_installment_plans": "Other Installment Plans",
 }
 
-def get_shap_values(pipeline, input_df):
+def get_shap_influence_values(pipeline, input_df):
     preprocessor = pipeline.named_steps["preprocessor"]
 
     if "feature_engineering" in pipeline.named_steps:
@@ -107,7 +107,7 @@ def get_shap_values(pipeline, input_df):
     # Rescale to always sum to 100%
     top_total = sum(abs(v) for v in raw_dict.values())
     influence_sorted = {
-        k: round((v / top_total) * 100, 1)
+        k: round((v / top_total) * 100, 2)
         for k, v in sorted(raw_dict.items(), key=lambda x: abs(x[1]), reverse=True)
     }
 
@@ -121,7 +121,8 @@ def home():
 def predict(candidate_data: CandidateData):
     input_df = pd.DataFrame([candidate_data.dict()])
 
-    prediction = int(model.predict(input_df)[0])
+    # prediction = int(model.predict(input_df)[0])
+    prediction = int((model.predict_proba(input_df)[0][1] >= threshold))
     probability = float(model.predict_proba(input_df)[0][1])
 
     if probability < 0.3:
@@ -131,12 +132,12 @@ def predict(candidate_data: CandidateData):
     else:
         risk_level = "High Risk"
 
-    shap_values = get_shap_values(model, input_df)
+    shap_influence_values = get_shap_influence_values(model, input_df)
 
     return {
         "prediction": prediction,
         "probability": probability,
         "risk_level": risk_level,
         "decision": "Likely to Default" if prediction == 1 else "Likely Non-Defaulter",
-        "shap_values": shap_values
+        "shap_influence_values": shap_influence_values
     }

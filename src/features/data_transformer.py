@@ -25,5 +25,5 @@ preprocessor_with_scaling = ColumnTransformer([
 preprocessor_without_scaling = ColumnTransformer([
     ("num", "passthrough", num_cols),
     ("ord", OrdinalEncoder(categories=ordinal_mapping), ordinal_cols),
-    ("nom", OneHotEncoder(drop="first"), nominal_cols)
+    ("nom", OneHotEncoder(drop=None), nominal_cols)
 ])

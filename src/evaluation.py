@@ -1,7 +1,7 @@
 import os
 import json
 import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, accuracy_score, precision_score, recall_score, f1_score, precision_recall_curve
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
 def evaluate_model(model, X, y):
@@ -20,6 +20,53 @@ def evaluate_model(model, X, y):
     }
     
     return metrics
+
+def find_optimal_threshold(model, X_val, y_val, min_recall=0.70):
+    """
+    Finds the highest threshold where recall >= min_recall.
+    More intuitive for credit risk — set a recall floor, maximize precision above it.
+    """
+    probs = model.predict_proba(X_val)[:, 1]
+    
+    thresholds = np.arange(0.10, 0.90, 0.01)
+    best_threshold = 0.5  # fallback
+    best_precision = 0.0
+
+    for t in thresholds:
+        preds = (probs >= t).astype(int)
+        if preds.sum() == 0:
+            continue
+        r = recall_score(y_val, preds)
+        p = precision_score(y_val, preds)
+        if r >= min_recall and p > best_precision:
+            best_precision = p
+            best_threshold = t
+
+    probs_at_best = (probs >= best_threshold).astype(int)
+    final_recall = recall_score(y_val, probs_at_best)
+    final_precision = precision_score(y_val, probs_at_best)
+
+    print(f"\nOptimal Threshold: {best_threshold:.4f}")
+    print(f"At this threshold → Precision: {final_precision:.4f} | Recall: {final_recall:.4f}")
+
+    return best_threshold
+    
+def evaluate_at_threshold(model, X_test, y_test, threshold):
+    probs = model.predict_proba(X_test)[:, 1]
+    preds = (probs >= threshold).astype(int)
+
+    metrics = {
+        'accuracy': accuracy_score(y_test, preds),
+        'precision': precision_score(y_test, preds),
+        'recall': recall_score(y_test, preds),
+        'f1': f1_score(y_test, preds),
+        'auc': roc_auc_score(y_test, probs),
+        'report': classification_report(y_test, preds, output_dict=True),
+        'confusion_matrix': confusion_matrix(y_test, preds)
+    }
+
+    return metrics
+
 
 def check_overfitting(model, X_train, y_train, X_test, y_test, name):
     
